@@ -1,0 +1,440 @@
+{
+  "method": "mdl_evidence_adaptive_tangent_core_v6",
+  "calibration_batches": 3,
+  "calibration_examples": 12,
+  "candidate_tensors": 20,
+  "selected_tensors": 19,
+  "skipped_tensors": 1,
+  "adapter_parameters": 26,
+  "head_policy": "frozen",
+  "head_trainable_parameters": 0,
+  "frozen_basis_values": 61568,
+  "fallback_reason": null,
+  "records": [
+    {
+      "name": "conv1.weight",
+      "shape": [
+        64,
+        3,
+        7,
+        7
+      ],
+      "role": "backbone",
+      "rank": 0,
+      "core_mode": "skipped",
+      "core_parameters": 0,
+      "basis_values": 0,
+      "total_gradient_energy": 6.745735983385326,
+      "noise_energy": 41.83597701688504,
+      "captured_mean_energy": 0.0,
+      "mdl_zero": -172719.98178770387,
+      "mdl_selected": -172719.98178770387,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer1.0.conv1.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 640,
+      "total_gradient_energy": 3.296742946204818,
+      "noise_energy": 19.42743912250615,
+      "captured_mean_energy": 2.9375487265207454,
+      "mdl_zero": -910770.7609144438,
+      "mdl_selected": -942876.9637990069,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer1.0.conv2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 640,
+      "total_gradient_energy": 2.2517211127049146,
+      "noise_energy": 16.96629175908374,
+      "captured_mean_energy": 1.901734232408728,
+      "mdl_zero": -934195.298815598,
+      "mdl_selected": -957187.0775122133,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer1.1.conv1.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 640,
+      "total_gradient_energy": 2.179104211529131,
+      "noise_energy": 22.82566248595704,
+      "captured_mean_energy": 1.7993242905304783,
+      "mdl_zero": -910599.9853364157,
+      "mdl_selected": -925632.9387843419,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer1.1.conv2.weight",
+      "shape": [
+        64,
+        64,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 640,
+      "total_gradient_energy": 3.0432267982616152,
+      "noise_energy": 19.830890894277655,
+      "captured_mean_energy": 2.642968697604374,
+      "mdl_zero": -912126.0705437631,
+      "mdl_selected": -940072.4228488132,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer2.0.conv1.weight",
+      "shape": [
+        128,
+        64,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 704,
+      "total_gradient_energy": 4.387622267421923,
+      "noise_energy": 32.193832187602396,
+      "captured_mean_energy": 3.7854230377287337,
+      "mdl_zero": -1878337.0683417716,
+      "mdl_selected": -1933414.9642409259,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer2.0.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 1280,
+      "total_gradient_energy": 4.442920595838029,
+      "noise_energy": 29.91925170888484,
+      "captured_mean_energy": 3.687316335012852,
+      "mdl_zero": -4084359.8969318573,
+      "mdl_selected": -4198403.375335144,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer2.0.downsample.0.weight",
+      "shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 192,
+      "total_gradient_energy": 0.6422048449073829,
+      "noise_energy": 4.18776832832259,
+      "captured_mean_energy": 0.5679093685731829,
+      "mdl_zero": -203953.31896259688,
+      "mdl_selected": -210039.3201851534,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer2.1.conv1.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 1280,
+      "total_gradient_energy": 6.325743502218457,
+      "noise_energy": 39.83686594415029,
+      "captured_mean_energy": 5.390347797236302,
+      "mdl_zero": -3948362.5876201806,
+      "mdl_selected": -4073951.632436602,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer2.1.conv2.weight",
+      "shape": [
+        128,
+        128,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 1280,
+      "total_gradient_energy": 5.377749150573805,
+      "noise_energy": 31.697163505615013,
+      "captured_mean_energy": 4.023926167535649,
+      "mdl_zero": -4039808.861666797,
+      "mdl_selected": -4151840.5476999604,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer3.0.conv1.weight",
+      "shape": [
+        256,
+        128,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 1408,
+      "total_gradient_energy": 12.248887864088594,
+      "noise_energy": 71.74128387172348,
+      "captured_mean_energy": 10.7178125927569,
+      "mdl_zero": -7968291.168374256,
+      "mdl_selected": -8260008.414786703,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer3.0.conv2.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 5120,
+      "total_gradient_energy": 11.640001259976165,
+      "noise_energy": 68.91511451383371,
+      "captured_mean_energy": 9.954063407959925,
+      "mdl_zero": -17240651.392803494,
+      "mdl_selected": -17767059.755613178,
+      "diagonal_bic": -17141085.29881975,
+      "dense_bic": -17138638.350941785
+    },
+    {
+      "name": "layer3.0.downsample.0.weight",
+      "shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 384,
+      "total_gradient_energy": 1.9176282113278527,
+      "noise_energy": 11.775023810421043,
+      "captured_mean_energy": 1.6726326830414564,
+      "mdl_zero": -848562.6463694338,
+      "mdl_selected": -877302.7720168359,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer3.1.conv1.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 5120,
+      "total_gradient_energy": 14.572639234664205,
+      "noise_energy": 89.76015923082184,
+      "captured_mean_energy": 12.145271720940684,
+      "mdl_zero": -16796278.569355033,
+      "mdl_selected": -17286741.21260482,
+      "diagonal_bic": -16859574.897302836,
+      "dense_bic": -16851547.09888497
+    },
+    {
+      "name": "layer3.1.conv2.weight",
+      "shape": [
+        256,
+        256,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 5120,
+      "total_gradient_energy": 15.96724347509487,
+      "noise_energy": 93.20027076490094,
+      "captured_mean_energy": 14.089261405959249,
+      "mdl_zero": -16697991.840562932,
+      "mdl_selected": -17254364.655343544,
+      "diagonal_bic": -16539051.728148779,
+      "dense_bic": -16534469.28668776
+    },
+    {
+      "name": "layer4.0.conv1.weight",
+      "shape": [
+        512,
+        256,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 5632,
+      "total_gradient_energy": 13.747435176030892,
+      "noise_energy": 83.32716964585751,
+      "captured_mean_energy": 11.78605999755473,
+      "mdl_zero": -36290013.98378365,
+      "mdl_selected": -37386614.7622836,
+      "diagonal_bic": -36231325.631313115,
+      "dense_bic": -36230937.10809657
+    },
+    {
+      "name": "layer4.0.conv2.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 10240,
+      "total_gradient_energy": 14.584541356135219,
+      "noise_energy": 88.44203890690562,
+      "captured_mean_energy": 12.484305208484841,
+      "mdl_zero": -77065481.32514523,
+      "mdl_selected": -79261773.26438047,
+      "diagonal_bic": -75934840.78756407,
+      "dense_bic": -75934059.06613857
+    },
+    {
+      "name": "layer4.0.downsample.0.weight",
+      "shape": [
+        512,
+        256,
+        1,
+        1
+      ],
+      "role": "backbone",
+      "rank": 1,
+      "core_mode": "diagonal",
+      "core_parameters": 1,
+      "basis_values": 768,
+      "total_gradient_energy": 6.984202405996996,
+      "noise_energy": 43.13722723368443,
+      "captured_mean_energy": 6.5406873726047365,
+      "mdl_zero": -3429562.5531003466,
+      "mdl_selected": -3563397.81559821,
+      "diagonal_bic": null,
+      "dense_bic": null
+    },
+    {
+      "name": "layer4.1.conv1.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 10240,
+      "total_gradient_energy": 12.942981139256037,
+      "noise_energy": 77.54654057194746,
+      "captured_mean_energy": 10.060139854925538,
+      "mdl_zero": -77967637.60619308,
+      "mdl_selected": -79931004.39986488,
+      "diagonal_bic": -77164333.36523728,
+      "dense_bic": -77163998.67410102
+    },
+    {
+      "name": "layer4.1.conv2.weight",
+      "shape": [
+        512,
+        512,
+        3,
+        3
+      ],
+      "role": "backbone",
+      "rank": 2,
+      "core_mode": "diagonal",
+      "core_parameters": 2,
+      "basis_values": 10240,
+      "total_gradient_energy": 16.042406811575468,
+      "noise_energy": 97.6822745375026,
+      "captured_mean_energy": 14.828893780863783,
+      "mdl_zero": -76371722.17047895,
+      "mdl_selected": -78786519.28347895,
+      "diagonal_bic": -74575612.4156722,
+      "dense_bic": -74575285.8408514
+    }
+  ],
+  "head_policy_scores": {
+    "frozen": -11755.044806653474,
+    "tangent": -11721.995604222364,
+    "full": 3543.9661050829127
+  }
+}

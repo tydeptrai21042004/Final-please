@@ -1,0 +1,17 @@
+{
+  "trainable_params": 26,
+  "adapter_trainable_params": 26,
+  "head_trainable_params": 0,
+  "total_params": 11178590,
+  "trainable_ratio": 2.3258747301761672e-06,
+  "adapter_trainable_ratio": 2.3258747301761672e-06,
+  "method": "trso",
+  "backbone": "resnet18",
+  "mdl_adapter_parameters": 26,
+  "mdl_head_policy": "frozen",
+  "mdl_head_trainable_parameters": 0,
+  "mdl_frozen_basis_values": 61568,
+  "mdl_frozen_basis_megabytes_fp32": 0.23486328125,
+  "mdl_deployed_extra_parameters": 0,
+  "mdl_deployed_total_params": 11178564
+}

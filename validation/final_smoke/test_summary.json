@@ -1,0 +1,70 @@
+{
+  "loss": 1.3366315960884094,
+  "acc1": 25.0,
+  "macro_precision": 6.25,
+  "macro_recall": 25.0,
+  "macro_f1": 10.000000149011612,
+  "weighted_f1": 10.000000149011612,
+  "balanced_accuracy": 25.0,
+  "ece": 9.395954012870789,
+  "mean_confidence": 34.39595401287079,
+  "brier_score": 0.7235398292541504,
+  "num_samples": 8.0,
+  "num_classes": 4.0,
+  "per_class_precision": [
+    25.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "per_class_recall": [
+    100.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "per_class_f1": [
+    40.00000059604645,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "per_class_accuracy": [
+    100.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "per_class_support": [
+    2,
+    1,
+    1,
+    4
+  ],
+  "confusion_matrix": [
+    [
+      2,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      4,
+      0,
+      0,
+      0
+    ]
+  ]
+}

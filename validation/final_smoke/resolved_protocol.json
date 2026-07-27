@@ -1,0 +1,30 @@
+{
+  "fair_protocol": false,
+  "optimizer": "adamw",
+  "scheduler": "cosine",
+  "learning_rate": 0.0003,
+  "weight_decay": 0.0001,
+  "adapter_weight_decay": 0.0,
+  "warmup_epochs": 0,
+  "warmup_steps": -1,
+  "minimum_learning_rate": 1e-06,
+  "epochs": 1,
+  "batch_size": 4,
+  "update_frequency": 1,
+  "augmentation": {
+    "train_aug": "standard",
+    "mixup": 0.0,
+    "cutmix": 0.0,
+    "color_jitter": 0.0,
+    "auto_augment": "rand-m9-mstd0.5-inc1",
+    "random_erasing": 0.0,
+    "label_smoothing": 0.0
+  },
+  "dataset": "fake",
+  "task_type": "single_label",
+  "backbone": "resnet18",
+  "method": "trso",
+  "seed": 0,
+  "split_seed": 42,
+  "protocol_fingerprint": "9660e5a599919b6e"
+}

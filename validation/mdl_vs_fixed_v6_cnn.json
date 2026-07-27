@@ -1,0 +1,22 @@
+[
+  {
+    "variant": "fixed_v6",
+    "accuracy": 100.0,
+    "adapter_parameters": 12,
+    "head_parameters": 294,
+    "total_trainable": 306,
+    "basis_values": 1110,
+    "selected": 3,
+    "head_policy": "full"
+  },
+  {
+    "variant": "mdl_v6",
+    "accuracy": 100.0,
+    "adapter_parameters": 16,
+    "head_parameters": 6,
+    "total_trainable": 22,
+    "basis_values": 2159,
+    "selected": 4,
+    "head_policy": "tangent"
+  }
+]
