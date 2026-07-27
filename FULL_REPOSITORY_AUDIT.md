@@ -1,17 +1,17 @@
 # Correction report
 
-The repository now uses only MDL-Evidence Adaptive Tangent-Core V6.
+The repository now uses only Cross-Fitted Evidence Adaptive Tangent-Core V6.
 
 ## Corrected scientific issues
 
 1. **Classifier over-compression:** replaced the chance-level readiness gate
-   with automatic frozen/tangent/full head BIC selection.
-2. **ResNet BatchNorm drift:** calibration now runs in evaluation mode and
+   with a fully trainable task head and cross-fitted evidence selection.
+2. **ResNet BatchNorm drift:** calibration now uses target-batch BatchNorm statistics and
    preserves running buffers exactly.
 3. **Large flattened bases:** replaced with compact two-sided
    \(U_\ell K_\ell V_\ell^\top\) bases.
 4. **Manual fixed rank:** replaced with MDL selection including rank zero.
-5. **Manual dense/diagonal choice:** replaced with cross-fold BIC rescue.
+5. **Manual dense/diagonal choice:** replaced with stable-rank evidence selection and chance-referenced full-core rescue.
 6. **All-layer selection:** unsupported layers automatically receive rank zero.
 7. **Incomplete efficiency reporting:** calibration output and aggregate CSV now
    report adapter coordinates, head parameters, and frozen basis values.

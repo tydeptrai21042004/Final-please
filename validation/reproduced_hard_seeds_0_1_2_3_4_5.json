@@ -1,0 +1,68 @@
+[
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 0,
+    "fixed_accuracy": 89.25,
+    "corrected_accuracy": 89.875,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  },
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 1,
+    "fixed_accuracy": 91.125,
+    "corrected_accuracy": 91.375,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  },
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 2,
+    "fixed_accuracy": 89.5,
+    "corrected_accuracy": 89.5,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  },
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 3,
+    "fixed_accuracy": 99.0,
+    "corrected_accuracy": 98.875,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  },
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 4,
+    "fixed_accuracy": 93.75,
+    "corrected_accuracy": 93.75,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  },
+  {
+    "suite": "hard",
+    "architecture": "cnn",
+    "seed": 5,
+    "fixed_accuracy": 93.625,
+    "corrected_accuracy": 93.5,
+    "fixed_adapter_parameters": 27,
+    "corrected_adapter_parameters": 27,
+    "corrected_selected_tensors": 3,
+    "dense_rescue": true
+  }
+]

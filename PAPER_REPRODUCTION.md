@@ -120,4 +120,4 @@ Use the active generic runner:
 python -m tools.run_fair_suite --help
 ```
 
-MDL-Evidence Adaptive Tangent-Core V6 has no manual rank, budget, threshold, layer, core-mode, head-policy, or calibration-length sweep because its adaptation dimension and selected tensors are data-derived.
+Cross-Fitted Evidence Adaptive Tangent-Core V6 has no manual rank, budget, threshold, layer, core-mode, head-policy, or calibration-length sweep because its adaptation dimension and selected tensors are data-derived.

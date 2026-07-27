@@ -122,7 +122,7 @@ def get_args_parser():
     parser.add_argument("--adapt_scale", default=1.0, type=float)
     parser.add_argument("--conv_adapter_mode", default="conv_parallel", choices=["conv_parallel", "conv_sequential", "residual_parallel", "residual_sequential"])
 
-    # MDL-Evidence Adaptive Tangent-Core V6: no method-specific rank, budget,
+    # Cross-Fitted Evidence Adaptive Tangent-Core V6: no method-specific rank, budget,
     # layer list, threshold, head policy, core mode, calibration-batch count,
     # gain, or adapter learning-rate argument.
     parser.add_argument(
@@ -814,7 +814,7 @@ def _add_adapters(model_backbone: nn.Module, args):
         print(f"[Conv-Adapter] inserted {count} adapters using {args.conv_adapter_mode}.")
 
     elif method == "trso":
-        print("[MDL Tangent-Core V6] Deferred evidence calibration until the training loader is available.")
+        print("[Cross-Fitted Tangent-Core V6] Deferred evidence calibration until the training loader is available.")
         return model_backbone, adapter_param_ids
 
     elif method == "ssf":
@@ -960,7 +960,7 @@ def set_trainability_policy(model: nn.Module, args, extra_adapter_param_ids: Opt
 
     if method == "trso":
         # The shared task head is the only warm-start coordinate before the
-        # calibration data select the final MDL tangent coordinates and head policy.
+        # calibration data select the final cross-fitted tangent coordinates; the full task head remains trainable.
         for name, parameter in model.named_parameters():
             parameter.requires_grad_(_is_head_param(name))
         _freeze_batchnorm(model)
@@ -1103,7 +1103,7 @@ def _move_training_batch(batch, device):
 
 
 def calibrate_trso_model(model: nn.Module, data_loader, device: torch.device, args) -> list[str]:
-    """Attach MDL-Evidence Adaptive Tangent-Core V6."""
+    """Attach Cross-Fitted Evidence Adaptive Tangent-Core V6."""
     from models.tuning_modules.mdl_tangent_core import calibrate_mdl_tangent_core
 
     was_training = model.training
@@ -1121,7 +1121,7 @@ def calibrate_trso_model(model: nn.Module, data_loader, device: torch.device, ar
     model.train(was_training)
     payload = getattr(model, "_mdl_tangent_report", report.to_dict())
     print(
-        "[MDL Tangent-Core V6] "
+        "[Cross-Fitted Tangent-Core V6] "
         f"selected={report.selected_tensors}/{report.candidate_tensors}; "
         f"adapter_parameters={report.adapter_parameters}; "
         f"head_policy={report.head_policy}; "
@@ -1129,7 +1129,7 @@ def calibrate_trso_model(model: nn.Module, data_loader, device: torch.device, ar
         f"basis_values={report.frozen_basis_values}"
     )
     if report.fallback_reason:
-        print(f"[MDL Tangent-Core V6] fallback: {report.fallback_reason}")
+        print(f"[Cross-Fitted Tangent-Core V6] fallback: {report.fallback_reason}")
     if args.output_dir:
         save_json_on_master(payload, os.path.join(args.output_dir, "mdl_tangent_calibration.json"))
     return [record.name for record in report.records if record.rank > 0]
@@ -1636,7 +1636,7 @@ def main(args):
     if args.tuning_method == "trso":
         if resume_checkpoint is not None:
             raise RuntimeError(
-                "Direct resume of a calibrated MDL tangent-core checkpoint requires its data-derived bases. "
+                "Direct resume of a calibrated cross-fitted tangent-core checkpoint requires its data-derived bases. "
                 "Start from --head_from or rerun the deterministic calibration pass."
             )
         calibrate_trso_model(model, data_loader_train, device, args)
@@ -1787,6 +1787,7 @@ def main(args):
         args, resume_checkpoint, optimizer, loss_scaler, model_ema
     )
 
+    initial_stats = None
     if args.evaluate_before_training and data_loader_val is not None and resume_checkpoint is None:
         initial_stats = evaluate(
             data_loader_val, model, device, use_amp=args.use_amp,
@@ -1807,7 +1808,7 @@ def main(args):
         if args.tuning_method == "trso" and args.trso_fast_inference:
             from models.tuning_modules.mdl_tangent_core import merge_mdl_tangent_cores_
             merged = merge_mdl_tangent_cores_(model_without_ddp)
-            print(f"[MDL Tangent-Core V6] exactly merged {merged} updates; runtime adapters=0")
+            print(f"[Cross-Fitted Tangent-Core V6] exactly merged {merged} updates; runtime adapters=0")
             if args.profile_efficiency:
                 from tools.profile_efficiency import profile_model, save_profile
                 profile = profile_model(
@@ -1838,6 +1839,41 @@ def main(args):
     best_val_metric = float(restored_training_state.get("best_val_metric", default_best))
     best_epoch = int(restored_training_state.get("best_epoch", -1))
     history = list(restored_training_state.get("history", []))
+
+    # Validation-safe residual adaptation: TRSO starts exactly from the shared
+    # linear-probe function (zero tangent coordinates). Treat that state as a
+    # legitimate checkpoint candidate. Training may replace it only when the
+    # validation metric improves, so adaptation cannot silently discard the
+    # stronger starting solution.
+    if args.tuning_method == "trso" and initial_stats is not None and resume_checkpoint is None:
+        initial_metric = float(initial_stats[metric_name])
+        initial_is_better = (
+            initial_metric > best_val_metric if maximize_metric
+            else initial_metric < best_val_metric
+        )
+        if initial_is_better:
+            best_val_metric = initial_metric
+            best_epoch = -1
+            initial_training_state = {
+                "best_val_metric": best_val_metric,
+                "best_epoch": best_epoch,
+                "history": history,
+                "primary_metric": metric_name,
+                "maximize_primary_metric": maximize_metric,
+                "global_update_step": 0,
+                "selection_origin": "zero_update_shared_head",
+            }
+            if args.output_dir and args.save_ckpt:
+                utils.save_model(
+                    args=args, model=model, model_without_ddp=model_without_ddp,
+                    optimizer=optimizer, loss_scaler=loss_scaler, epoch="best",
+                    model_ema=model_ema, training_state=initial_training_state,
+                )
+            print(
+                "[TRSO validation safeguard] zero-update shared-head state "
+                f"registered as the initial best: {format_primary(initial_stats, args.task_type)}"
+            )
+
     start_time = time.time()
 
     print(f"Start training for {args.epochs} epochs")
@@ -2009,7 +2045,7 @@ def main(args):
             set_mdl_tangent_trainability(model_without_ddp)
             if args.trso_fast_inference:
                 merged = merge_mdl_tangent_cores_(model_without_ddp)
-                print(f"[MDL Tangent-Core V6] exactly merged {merged} updates; runtime adapters=0")
+                print(f"[Cross-Fitted Tangent-Core V6] exactly merged {merged} updates; runtime adapters=0")
                 if args.profile_efficiency:
                     from tools.profile_efficiency import profile_model, save_profile
                     profile = profile_model(

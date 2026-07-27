@@ -1,0 +1,169 @@
+{
+  "method": "cross_fitted_evidence_adaptive_tangent_core_v6",
+  "selection_revision": "square_root_chance_dense_rescue",
+  "standard_rows": [
+    {
+      "suite": "standard",
+      "architecture": "cnn",
+      "seed": 0,
+      "fixed_accuracy": 100.0,
+      "corrected_accuracy": 100.0,
+      "fixed_adapter_parameters": 12,
+      "corrected_adapter_parameters": 9,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": false
+    },
+    {
+      "suite": "standard",
+      "architecture": "vit",
+      "seed": 0,
+      "fixed_accuracy": 97.0,
+      "corrected_accuracy": 97.33333333333333,
+      "fixed_adapter_parameters": 54,
+      "corrected_adapter_parameters": 34,
+      "corrected_selected_tensors": 15,
+      "dense_rescue": false
+    },
+    {
+      "suite": "standard",
+      "architecture": "cnn",
+      "seed": 1,
+      "fixed_accuracy": 100.0,
+      "corrected_accuracy": 100.0,
+      "fixed_adapter_parameters": 12,
+      "corrected_adapter_parameters": 8,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": false
+    },
+    {
+      "suite": "standard",
+      "architecture": "vit",
+      "seed": 1,
+      "fixed_accuracy": 95.5,
+      "corrected_accuracy": 98.66666666666667,
+      "fixed_adapter_parameters": 54,
+      "corrected_adapter_parameters": 32,
+      "corrected_selected_tensors": 15,
+      "dense_rescue": false
+    },
+    {
+      "suite": "standard",
+      "architecture": "cnn",
+      "seed": 2,
+      "fixed_accuracy": 100.0,
+      "corrected_accuracy": 100.0,
+      "fixed_adapter_parameters": 12,
+      "corrected_adapter_parameters": 6,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": false
+    },
+    {
+      "suite": "standard",
+      "architecture": "vit",
+      "seed": 2,
+      "fixed_accuracy": 99.33333333333333,
+      "corrected_accuracy": 98.83333333333333,
+      "fixed_adapter_parameters": 54,
+      "corrected_adapter_parameters": 31,
+      "corrected_selected_tensors": 15,
+      "dense_rescue": false
+    }
+  ],
+  "hard_rows": [
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 0,
+      "fixed_accuracy": 89.25,
+      "corrected_accuracy": 89.875,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    },
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 1,
+      "fixed_accuracy": 91.125,
+      "corrected_accuracy": 91.375,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    },
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 2,
+      "fixed_accuracy": 89.5,
+      "corrected_accuracy": 89.5,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    },
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 3,
+      "fixed_accuracy": 99.0,
+      "corrected_accuracy": 98.875,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    },
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 4,
+      "fixed_accuracy": 93.75,
+      "corrected_accuracy": 93.75,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    },
+    {
+      "suite": "hard",
+      "architecture": "cnn",
+      "seed": 5,
+      "fixed_accuracy": 93.625,
+      "corrected_accuracy": 93.5,
+      "fixed_adapter_parameters": 27,
+      "corrected_adapter_parameters": 27,
+      "corrected_selected_tensors": 3,
+      "dense_rescue": true
+    }
+  ],
+  "summary": {
+    "standard_cnn": {
+      "count": 3,
+      "fixed_accuracy_mean": 100.0,
+      "corrected_accuracy_mean": 100.0,
+      "accuracy_delta_mean": 0.0,
+      "fixed_adapter_parameters_mean": 12.0,
+      "corrected_adapter_parameters_mean": 7.666666666666667,
+      "adapter_parameter_reduction_fraction": 0.36111111111111116
+    },
+    "standard_vit": {
+      "count": 3,
+      "fixed_accuracy_mean": 97.27777777777777,
+      "corrected_accuracy_mean": 98.27777777777777,
+      "accuracy_delta_mean": 1.0,
+      "fixed_adapter_parameters_mean": 54.0,
+      "corrected_adapter_parameters_mean": 32.333333333333336,
+      "adapter_parameter_reduction_fraction": 0.4012345679012346
+    },
+    "hard_cnn": {
+      "count": 6,
+      "fixed_accuracy_mean": 92.70833333333333,
+      "corrected_accuracy_mean": 92.8125,
+      "accuracy_delta_mean": 0.10416666666666667,
+      "fixed_adapter_parameters_mean": 27.0,
+      "corrected_adapter_parameters_mean": 27.0,
+      "adapter_parameter_reduction_fraction": 0.0
+    }
+  }
+}

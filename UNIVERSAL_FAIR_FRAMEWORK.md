@@ -3,7 +3,7 @@
 `tools.run_fair_suite` schedules all scientifically compatible method/backbone/task
 pairs and records every rejected pair explicitly. For each backbone and seed, it
 first trains one linear probe and reuses its best task head for compatible PEFT
-methods, including MDL-Evidence Adaptive Tangent-Core V6.
+methods, including Cross-Fitted Evidence Adaptive Tangent-Core V6.
 
 ## Controlled settings
 

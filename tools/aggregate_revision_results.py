@@ -59,7 +59,12 @@ def summarize_mdl_tangent_calibration(payload: Dict[str, Any]) -> Dict[str, Any]
         "head_trainable_parameters": payload.get("head_trainable_parameters"),
         "frozen_basis_values": payload.get("frozen_basis_values"),
         "diagonal_tensors": sum(row.get("core_mode") == "diagonal" for row in selected),
-        "dense_tensors": sum(row.get("core_mode") == "dense" for row in selected),
+        "sparse_cross_tensors": sum(row.get("core_mode") == "sparse_cross_evidence" for row in selected),
+        "dense_tensors": sum(row.get("core_mode") == "dense_chance_rescue" for row in selected),
+        "calibration_mean_loss": payload.get("calibration_mean_loss"),
+        "chance_reference_loss": payload.get("chance_reference_loss"),
+        "dense_rescue_activated": payload.get("dense_rescue_activated"),
+        "selection_rule": payload.get("selection_rule"),
         "mean_selected_rank": mean_of("rank"),
         "mean_core_parameters": mean_of("core_parameters"),
         "mean_captured_fraction": (

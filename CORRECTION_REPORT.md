@@ -1,24 +1,26 @@
 # Correction report
 
-The repository now uses only MDL-Evidence Adaptive Tangent-Core V6.
+## Confirmed failure in the previous release
 
-## Corrected scientific issues
+The first DTD run selected `head_policy=frozen` for both ResNet-50 and ViT-Tiny. It obtained
+67.45% and 50.53% accuracy, respectively. The classifier BIC penalty made the frozen policy
+almost unavoidable, while the layer MDL score incorrectly treated matrix entries as
+independent observations.
 
-1. **Classifier over-compression:** replaced the chance-level readiness gate
-   with automatic frozen/tangent/full head BIC selection.
-2. **ResNet BatchNorm drift:** calibration now runs in evaluation mode and
-   preserves running buffers exactly.
-3. **Large flattened bases:** replaced with compact two-sided
-   \(U_\ell K_\ell V_\ell^\top\) bases.
-4. **Manual fixed rank:** replaced with MDL selection including rank zero.
-5. **Manual dense/diagonal choice:** replaced with cross-fold BIC rescue.
-6. **All-layer selection:** unsupported layers automatically receive rank zero.
-7. **Incomplete efficiency reporting:** calibration output and aggregate CSV now
-   report adapter coordinates, head parameters, and frozen basis values.
+## Implemented corrections
 
-## Verification
+- Removed frozen/tangent/full head selection; the complete task head is always trained.
+- Replaced the `Bmn` information score with symmetric cross-fold predictive gain.
+- Added stable-rank automatic capacity with no rank or energy threshold.
+- Added chance-referenced dense rescue for an uninformative transferred head.
+- Changed CNN calibration to use target-batch BatchNorm statistics while restoring all
+  running buffers exactly.
+- Registered the zero-update shared-head model as the initial best validation checkpoint.
+- Updated result aggregation to report calibration loss, chance reference, rescue state,
+  selected ranks, coordinate modes, adapter parameters, and basis storage.
 
-- 82 repository tests pass.
-- The fake-data ResNet-18 smoke run completes calibration, one training epoch,
-  validation checkpoint selection, checkpoint reload, exact merge, and final
-  testing.
+## What is guaranteed
+
+The selected TRSO checkpoint cannot be worse than its zero-update shared-head starting point
+on the validation metric used by the runner. Exact test-set improvement cannot be promised
+without executing the real DTD rerun; test labels are never used for model selection.

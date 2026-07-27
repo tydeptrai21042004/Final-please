@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from models.tuning_modules.mdl_tangent_core import (
     MDLTangentCoreParametrization,
+    _needs_dense_rescue,
     calibrate_mdl_tangent_core,
     iter_mdl_tangent_parametrizations,
     mdl_tangent_basis_value_count,
@@ -66,9 +67,12 @@ def test_calibration_is_batchnorm_safe_and_identity_preserving():
     torch.testing.assert_close(model.norm.running_mean, running_mean)
     torch.testing.assert_close(model.norm.running_var, running_var)
     assert report.calibration_batches == len(loader())
-    assert report.method == "mdl_evidence_adaptive_tangent_core_v6"
+    assert report.method == "cross_fitted_evidence_adaptive_tangent_core_v6"
     assert mdl_tangent_parameter_count(model) == report.adapter_parameters
     assert mdl_tangent_basis_value_count(model) == report.frozen_basis_values
+    assert report.head_policy == "full"
+    assert report.head_trainable_parameters == sum(p.numel() for p in model.head.parameters())
+    assert all(parameter.requires_grad for parameter in model.head.parameters())
     assert any(parameter.requires_grad for parameter in model.parameters())
 
 
@@ -152,3 +156,13 @@ def test_transformer_like_model_uses_same_architecture_neutral_rule():
     assert "mlp.2.weight" in names
     assert not any("norm" in name for name in names)
     assert any(parameter.requires_grad for parameter in model.parameters())
+
+
+def test_square_root_chance_rescue_has_no_manual_threshold():
+    classes = 47
+    boundary = 0.5 * torch.log(torch.tensor(float(classes))).item()
+    assert not _needs_dense_rescue(boundary - 1e-6, classes)
+    assert _needs_dense_rescue(boundary, classes)
+    assert _needs_dense_rescue(boundary + 1e-6, classes)
+    assert not _needs_dense_rescue(None, classes)
+    assert not _needs_dense_rescue(boundary, None)

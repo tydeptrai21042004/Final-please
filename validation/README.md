@@ -1,15 +1,8 @@
-# Validation artifacts
+# Executed validation artifacts
 
-## `mdl_vs_fixed_v6_cnn.json`
+- `CORRECTED_V6_VALIDATION.json`: combined rows and summary statistics.
+- `reproduced_standard_seeds_0_1_2.json`: three-seed standard CNN/ViT comparison.
+- `reproduced_hard_seeds_0_1_2_3_4_5.json`: six-seed difficult CNN comparison.
+- `final_smoke/`: end-to-end CPU runner output proving checkpoint fallback and exact merge.
 
-Offline controlled source-to-target texture transfer on the same TinyCNN,
-training schedule, data split, and seed for both methods.
-
-| Method | Accuracy | Adapter parameters | Head parameters | Total trainable | Frozen basis values |
-|---|---:|---:|---:|---:|---:|
-| Historical fixed-rank V6 | 100.0% | 12 | 294 | 306 | 1,110 |
-| MDL-Evidence V6 | 100.0% | 16 | 6 | 22 | 2,159 |
-
-The new method preserved accuracy while reducing total trainable parameters by
-92.8%. It selected a tangent-compressed head automatically. This is a controlled
-sanity check, not a replacement for the required multi-seed DTD benchmark.
+The controlled validator compares the active proposal with a test-only historical fixed-rank V6 reference. It does not use real DTD test labels and does not replace the required GPU DTD rerun.
