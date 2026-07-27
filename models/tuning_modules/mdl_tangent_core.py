@@ -1,26 +1,32 @@
-"""MDL-Evidence Adaptive Tangent-Core TRSO.
+"""Cross-Fitted Evidence Adaptive Tangent-Core TRSO V6.
 
-This module replaces every previous TRSO proposal implementation.  It exposes
-no proposal-specific rank, layer list, parameter budget, energy threshold,
-core type, head policy, or calibration-length hyperparameter.
+This module implements a proposal-capacity rule with no manual rank, layer,
+parameter-budget, energy-threshold, core-type, head-policy, or calibration-
+length controls.
 
-For every eligible weight tensor W_l, the complete calibration loader provides
-batch gradients.  Their sufficient statistics define a mean task response
-G_l and its across-batch noise.  The update is
+For every eligible backbone tensor W_l, the complete calibration loader is
+split deterministically into odd/even folds.  Let G_l^(0), G_l^(1) be their
+mean task gradients and let U_l, V_l be the singular bases of the pooled mean.
+For a tangent coordinate (i,j), its fold coefficients are
 
-    W_l^eff = W_l + U_l K_l V_l^T,
+    c_ij^(f) = u_i^T G_l^(f) v_j.
 
-where the rank is selected by a minimum-description-length (MDL) criterion that
-admits rank zero.  A diagonal core is the parsimonious default; a deterministic
-cross-fold BIC comparison promotes it to a dense core only when off-diagonal
-interactions improve out-of-fold gradient reconstruction enough to pay for the
-extra coordinates.  The task head is selected automatically among frozen,
-tangent-compressed, and fully trainable policies by the same evidence/complexity
-principle.
+Fitting the coordinate on one fold and predicting the other gives the exact
+symmetric held-out reduction
 
-Calibration is performed in evaluation mode, so BatchNorm running statistics
-and dropout state are not mutated.  All learned updates can be merged exactly
-into the original weights for an adapter-free inference graph.
+    gain_ij = 4 c_ij^(0)c_ij^(1) - (c_ij^(0))^2 - (c_ij^(1))^2.
+
+A coordinate is retained iff this gain is strictly positive.  Thus every
+selected coordinate improves cross-fold prediction relative to the zero
+update; unstable/noisy coordinates are discarded without a user threshold.
+Leading stable diagonal coordinates define the layer rank, and stable
+cross-mode coordinates provide a sparse automatic rescue when they also have
+positive held-out evidence.
+
+The task classifier is always fully trainable.  It is task-specific rather
+than reusable pretrained structure, and compressing/freezing it was the main
+failure mode of the previous MDL version.  Calibration disables dropout while using target-batch BatchNorm statistics; every BatchNorm buffer and module state is restored exactly afterward.  Learned updates merge exactly
+into the original weights for adapter-free deployment.
 """
 from __future__ import annotations
 
@@ -49,6 +55,9 @@ class MDLTangentRecord:
     mdl_selected: float
     diagonal_bic: float | None
     dense_bic: float | None
+    stable_diagonal_coordinates: int = 0
+    stable_cross_coordinates: int = 0
+    heldout_predictive_gain: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -68,6 +77,9 @@ class MDLTangentReport:
     frozen_basis_values: int
     fallback_reason: str | None
     records: tuple[MDLTangentRecord, ...]
+    calibration_mean_loss: float | None = None
+    chance_reference_loss: float | None = None
+    dense_rescue_activated: bool = False
 
     def to_dict(self) -> dict:
         payload = asdict(self)
@@ -136,7 +148,7 @@ class _Statistic:
 
 
 class MDLTangentCoreParametrization(nn.Module):
-    """Two-sided task-response update with an automatically selected core."""
+    """Sparse two-sided task-response update selected by cross-fold evidence."""
 
     def __init__(
         self,
@@ -144,7 +156,9 @@ class MDLTangentCoreParametrization(nn.Module):
         right_basis: Tensor,
         original_shape: Iterable[int],
         *,
-        dense_core: bool,
+        coordinate_rows: Tensor | None = None,
+        coordinate_columns: Tensor | None = None,
+        dense_core: bool | None = None,
     ) -> None:
         super().__init__()
         if left_basis.ndim != 2 or right_basis.ndim != 2:
@@ -161,28 +175,40 @@ class MDLTangentCoreParametrization(nn.Module):
         if left_basis.shape[0] != shape[0] or right_basis.shape[0] != flat_input:
             raise ValueError("basis dimensions do not match the original tensor")
 
+        # Backward-compatible construction for older checkpoints/tests.
+        if coordinate_rows is None or coordinate_columns is None:
+            if dense_core:
+                rows = torch.arange(rank).repeat_interleave(rank)
+                columns = torch.arange(rank).repeat(rank)
+            else:
+                rows = torch.arange(rank)
+                columns = torch.arange(rank)
+        else:
+            rows = coordinate_rows.detach().to(device="cpu", dtype=torch.long).flatten()
+            columns = coordinate_columns.detach().to(device="cpu", dtype=torch.long).flatten()
+        if rows.numel() == 0 or rows.numel() != columns.numel():
+            raise ValueError("at least one matched tangent coordinate is required")
+        if int(rows.min()) < 0 or int(columns.min()) < 0 or int(rows.max()) >= rank or int(columns.max()) >= rank:
+            raise ValueError("coordinate index exceeds tangent rank")
+
         self.original_shape = shape
         self.rank = rank
-        self.dense_core = bool(dense_core)
+        self.dense_core = bool(rows.numel() == rank * rank)
         self.register_buffer("left_basis", left_basis.detach().contiguous())
         self.register_buffer("right_basis", right_basis.detach().contiguous())
-        if self.dense_core:
-            self.core = nn.Parameter(
-                torch.zeros(rank, rank, dtype=left_basis.dtype, device=left_basis.device)
-            )
-        else:
-            self.core = nn.Parameter(
-                torch.zeros(rank, dtype=left_basis.dtype, device=left_basis.device)
-            )
+        self.register_buffer("coordinate_rows", rows.contiguous())
+        self.register_buffer("coordinate_columns", columns.contiguous())
+        self.core = nn.Parameter(
+            torch.zeros(rows.numel(), dtype=left_basis.dtype, device=left_basis.device)
+        )
 
     def delta_matrix(self) -> Tensor:
-        if self.dense_core:
-            return self.left_basis @ self.core @ self.right_basis.transpose(0, 1)
-        return (self.left_basis * self.core.unsqueeze(0)) @ self.right_basis.transpose(0, 1)
+        left = self.left_basis.index_select(1, self.coordinate_rows)
+        right = self.right_basis.index_select(1, self.coordinate_columns)
+        return (left * self.core.unsqueeze(0)) @ right.transpose(0, 1)
 
     def forward(self, parameter: Tensor) -> Tensor:
-        delta = self.delta_matrix().reshape(self.original_shape)
-        return parameter + delta.to(dtype=parameter.dtype)
+        return parameter + self.delta_matrix().reshape(self.original_shape).to(dtype=parameter.dtype)
 
     @property
     def trainable_parameter_count(self) -> int:
@@ -218,11 +244,7 @@ def _is_normalization_or_embedding(module: nn.Module) -> bool:
     )
 
 
-def _iter_calibration_candidates(
-    model: nn.Module,
-    is_head: Callable[[str], bool],
-) -> Iterator[_Candidate]:
-    """Yield unique floating tensors needed by backbone and head selection."""
+def _iter_calibration_candidates(model: nn.Module, is_head: Callable[[str], bool]) -> Iterator[_Candidate]:
     seen: set[int] = set()
     for module_name, module in model.named_modules():
         for parameter_name, parameter in module.named_parameters(recurse=False):
@@ -232,11 +254,18 @@ def _iter_calibration_candidates(
             full_name = f"{module_name}.{parameter_name}" if module_name else parameter_name
             head = bool(is_head(full_name))
             if head:
-                yield _Candidate(module_name, parameter_name, module, parameter, True)
+                # The full task head is trained directly and does not need a
+                # gradient-history basis.
                 continue
             if parameter.ndim < 2 or _is_normalization_or_embedding(module):
                 continue
             yield _Candidate(module_name, parameter_name, module, parameter, False)
+
+
+def _iter_head_parameters(model: nn.Module, is_head: Callable[[str], bool]) -> Iterator[tuple[str, Tensor]]:
+    for name, parameter in model.named_parameters():
+        if ".parametrizations." not in name and is_head(name):
+            yield name, parameter
 
 
 def _unpack_batch(batch, device: torch.device | str):
@@ -251,16 +280,12 @@ def _unpack_batch(batch, device: torch.device | str):
 
 
 def _truncated_svd(matrix: Tensor, rank: int) -> tuple[Tensor, Tensor, Tensor]:
-    """Deterministic exact-small/randomized-large SVD up to a data-derived rank."""
     rows, columns = matrix.shape
     resolved = max(1, min(int(rank), rows, columns))
     matrix = matrix.float()
     if min(rows, columns) <= 128 or matrix.numel() <= 262_144 or resolved == min(rows, columns):
         left, singular, right_h = torch.linalg.svd(matrix, full_matrices=False)
         return left[:, :resolved], singular[:resolved], right_h[:resolved]
-
-    # Oversampling and power iterations are numerical approximation constants,
-    # not proposal controls.  The statistical rank itself is set only by MDL.
     oversampling = max(4, int(math.ceil(math.log2(max(2, min(rows, columns))))))
     sketch = min(min(rows, columns), resolved + oversampling)
     generator = torch.Generator(device=matrix.device)
@@ -276,79 +301,6 @@ def _truncated_svd(matrix: Tensor, rank: int) -> tuple[Tensor, Tensor, Tensor]:
     return left[:, :resolved], singular[:resolved], right_h[:resolved]
 
 
-def _safe_information_score(rss: float, observations: int, complexity: int) -> float:
-    observations = max(2, int(observations))
-    scale = max(float(rss) / observations, torch.finfo(torch.float64).tiny)
-    return observations * math.log(scale) + int(complexity) * math.log(observations)
-
-
-def _rank_mdl(
-    statistic: _Statistic,
-    matrix: Tensor,
-    singular: Tensor,
-) -> tuple[int, list[float], list[float], float]:
-    """Select rank, including zero, from gradient fit versus description length."""
-    batches = statistic.count
-    rows, columns = matrix.shape
-    values = rows * columns
-    observations = batches * values
-    mean_energy = float(matrix.double().square().sum().item())
-    noise = statistic.noise_sse()
-    cumulative = 0.0
-    scores: list[float] = []
-    residuals: list[float] = []
-    for rank in range(0, int(singular.numel()) + 1):
-        if rank:
-            cumulative += float(singular[rank - 1].double().square().item())
-        mean_residual = max(0.0, mean_energy - cumulative)
-        rss = noise + batches * mean_residual
-        # The code length includes the data-derived two-sided subspace and the
-        # diagonal trainable coordinates.  This prevents large layers from
-        # receiving unsupported modes merely because they contain many entries.
-        complexity = 0 if rank == 0 else rank * (rows + columns - rank) + rank
-        scores.append(_safe_information_score(rss, observations, complexity))
-        residuals.append(rss)
-    selected = min(range(len(scores)), key=lambda index: (scores[index], index))
-    return selected, scores, residuals, noise
-
-
-def _core_bic(
-    statistic: _Statistic,
-    left: Tensor,
-    right: Tensor,
-) -> tuple[bool, float | None, float | None]:
-    """Cross-fold evidence test for diagonal versus dense tangent interactions."""
-    first = statistic.fold_mean(0)
-    second = statistic.fold_mean(1)
-    rank = int(left.shape[1])
-    if first is None or second is None or rank <= 1:
-        return False, None, None
-    first_matrix = first.float().reshape(left.shape[0], -1)
-    second_matrix = second.float().reshape(left.shape[0], -1)
-    right_t = right.transpose(0, 1)
-
-    def prediction_error(fit: Tensor, validation: Tensor, dense: bool) -> float:
-        coordinates = left.transpose(0, 1) @ fit @ right
-        if not dense:
-            coordinates = torch.diag(torch.diagonal(coordinates))
-        prediction = left @ coordinates @ right_t
-        return float((validation - prediction).double().square().sum().item())
-
-    diagonal_rss = (
-        statistic.fold_counts[1] * prediction_error(first_matrix, second_matrix, False)
-        + statistic.fold_counts[0] * prediction_error(second_matrix, first_matrix, False)
-    )
-    dense_rss = (
-        statistic.fold_counts[1] * prediction_error(first_matrix, second_matrix, True)
-        + statistic.fold_counts[0] * prediction_error(second_matrix, first_matrix, True)
-    )
-    observations = statistic.count * first_matrix.numel()
-    diagonal_bic = _safe_information_score(diagonal_rss, observations, rank)
-    dense_bic = _safe_information_score(dense_rss, observations, rank * rank)
-    return dense_bic < diagonal_bic, diagonal_bic, dense_bic
-
-
-
 def _distributed_reduce_device(device: torch.device | str) -> torch.device:
     resolved = torch.device(device)
     if not torch.distributed.is_available() or not torch.distributed.is_initialized():
@@ -358,20 +310,11 @@ def _distributed_reduce_device(device: torch.device | str) -> torch.device:
 
 
 def _synchronize_statistics(
-    statistics: dict[str, _Statistic],
-    *,
-    device: torch.device | str,
-    batches: int,
-    examples: int,
-) -> tuple[int, int]:
-    """All-reduce calibration evidence before DDP wrapping.
-
-    The fair runner normally schedules one process per GPU.  This synchronization
-    also makes native distributed runs safe: every rank derives identical MDL
-    ranks, core structures, and parametrization shapes.
-    """
+    statistics: dict[str, _Statistic], *, device, batches: int, examples: int,
+    loss_sum: float, class_count: int | None,
+) -> tuple[int, int, float, int | None]:
     if not torch.distributed.is_available() or not torch.distributed.is_initialized():
-        return batches, examples
+        return batches, examples, loss_sum, class_count
     reduce_device = _distributed_reduce_device(device)
     for statistic in statistics.values():
         for index in range(2):
@@ -379,47 +322,58 @@ def _synchronize_statistics(
             torch.distributed.all_reduce(value, op=torch.distributed.ReduceOp.SUM)
             statistic.fold_sums[index] = value.to(device="cpu", dtype=torch.float32)
         metadata = torch.tensor(
-            [
-                float(statistic.count),
-                float(statistic.fold_counts[0]),
-                float(statistic.fold_counts[1]),
-                float(statistic.squared_norm_sum),
-            ],
+            [float(statistic.count), float(statistic.fold_counts[0]), float(statistic.fold_counts[1]), float(statistic.squared_norm_sum)],
             dtype=torch.float64,
             device=reduce_device,
         )
         torch.distributed.all_reduce(metadata, op=torch.distributed.ReduceOp.SUM)
         statistic.count = int(round(float(metadata[0].item())))
-        statistic.fold_counts = [
-            int(round(float(metadata[1].item()))),
-            int(round(float(metadata[2].item()))),
-        ]
+        statistic.fold_counts = [int(round(float(metadata[1].item()))), int(round(float(metadata[2].item())))]
         statistic.squared_norm_sum = float(metadata[3].item())
-    totals = torch.tensor([float(batches), float(examples)], dtype=torch.float64, device=reduce_device)
+    totals = torch.tensor(
+        [float(batches), float(examples), float(loss_sum)],
+        dtype=torch.float64, device=reduce_device,
+    )
     torch.distributed.all_reduce(totals, op=torch.distributed.ReduceOp.SUM)
-    return int(round(float(totals[0].item()))), int(round(float(totals[1].item())))
+    classes = torch.tensor(float(class_count or 0), dtype=torch.float64, device=reduce_device)
+    torch.distributed.all_reduce(classes, op=torch.distributed.ReduceOp.MAX)
+    resolved_classes = int(round(float(classes.item()))) or None
+    return (
+        int(round(float(totals[0].item()))),
+        int(round(float(totals[1].item()))),
+        float(totals[2].item()),
+        resolved_classes,
+    )
 
-def _collect_statistics(
-    model: nn.Module,
-    candidates: list[_Candidate],
-    data_loader,
-    loss_fn: Callable[[Tensor, Tensor], Tensor],
-    *,
-    device: torch.device | str,
-    logits_fn: Callable[[object], Tensor],
-    batch_to_device: Callable[[object, torch.device | str], tuple[Tensor, Tensor]],
-) -> tuple[dict[str, _Statistic], int, int]:
+
+def _collect_statistics(model, candidates, data_loader, loss_fn, *, device, logits_fn, batch_to_device):
     original_requires_grad = {id(parameter): parameter.requires_grad for parameter in model.parameters()}
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     for candidate in candidates:
         candidate.parameter.requires_grad_(True)
-
     statistics = {candidate.name: _Statistic.empty(candidate.parameter) for candidate in candidates}
     was_training = model.training
-    model.eval()  # Critical: preserve BatchNorm buffers and disable dropout.
+    module_training = {id(module): module.training for module in model.modules()}
+    batchnorm_state = []
+    for module in model.modules():
+        if isinstance(module, nn.modules.batchnorm._BatchNorm):
+            batchnorm_state.append((
+                module,
+                module.running_mean.detach().clone() if module.running_mean is not None else None,
+                module.running_var.detach().clone() if module.running_var is not None else None,
+                module.num_batches_tracked.detach().clone() if module.num_batches_tracked is not None else None,
+            ))
+    # Disable stochastic dropout, but let BatchNorm use target-batch statistics
+    # while gradients are collected. Running buffers are restored exactly below.
+    model.eval()
+    for module, _, _, _ in batchnorm_state:
+        module.train(True)
     batches = 0
     examples = 0
+    loss_sum = 0.0
+    class_count: int | None = None
+    classification_compatible = True
     try:
         for batch in data_loader:
             inputs, targets = batch_to_device(batch, device)
@@ -427,134 +381,195 @@ def _collect_statistics(
             logits = logits_fn(model(inputs))
             loss = loss_fn(logits, targets)
             if not torch.isfinite(loss):
-                raise FloatingPointError("non-finite MDL tangent calibration loss")
+                raise FloatingPointError("non-finite tangent calibration loss")
+            batch_examples = int(targets.shape[0]) if getattr(targets, "ndim", 0) else 1
+            loss_sum += float(loss.detach().item()) * batch_examples
+            if (
+                isinstance(logits, Tensor) and logits.ndim == 2
+                and getattr(targets, "ndim", 0) == 1
+                and targets.dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8)
+            ):
+                observed_classes = int(logits.shape[-1])
+                class_count = observed_classes if class_count in (None, observed_classes) else None
+            else:
+                classification_compatible = False
             loss.backward()
             fold = batches & 1
             for candidate in candidates:
                 gradient = candidate.parameter.grad
                 if gradient is not None:
                     statistics[candidate.name].update(gradient, fold)
-            examples += int(targets.shape[0]) if getattr(targets, "ndim", 0) else 1
+            examples += batch_examples
             batches += 1
     finally:
         model.zero_grad(set_to_none=True)
+        for module, running_mean, running_var, num_batches_tracked in batchnorm_state:
+            if running_mean is not None:
+                module.running_mean.copy_(running_mean)
+            if running_var is not None:
+                module.running_var.copy_(running_var)
+            if num_batches_tracked is not None:
+                module.num_batches_tracked.copy_(num_batches_tracked)
+        for module in model.modules():
+            module.train(module_training[id(module)])
         model.train(was_training)
         for parameter in model.parameters():
             parameter.requires_grad_(original_requires_grad[id(parameter)])
-
     if batches == 0:
         raise RuntimeError("calibration loader produced no batches")
-    batches, examples = _synchronize_statistics(
-        statistics, device=device, batches=batches, examples=examples
+    if not classification_compatible:
+        class_count = None
+    batches, examples, loss_sum, class_count = _synchronize_statistics(
+        statistics, device=device, batches=batches, examples=examples,
+        loss_sum=loss_sum, class_count=class_count,
     )
-    return statistics, batches, examples
+    mean_loss = float(loss_sum / max(1, examples))
+    return statistics, batches, examples, mean_loss, class_count
+
+
+def _cross_fold_gain(first: Tensor, second: Tensor) -> Tensor:
+    """Exact symmetric held-out improvement over the zero-coordinate predictor."""
+    return 4.0 * first * second - first.square() - second.square()
 
 
 def _analyze_weight(
-    candidate: _Candidate,
-    statistic: _Statistic,
-) -> tuple[MDLTangentRecord, Tensor | None, Tensor | None, float]:
-    mean = statistic.mean().float()
-    matrix = mean.reshape(mean.shape[0], -1)
-    identifiable_rank = min(matrix.shape[0], matrix.shape[1], max(1, statistic.count - 1))
-    left, singular, right_h = _truncated_svd(matrix, identifiable_rank)
-    rank, scores, residuals, noise = _rank_mdl(statistic, matrix, singular)
-    total = float(mean.double().square().sum().item())
-    if rank <= 0:
+    candidate: _Candidate, statistic: _Statistic, *, dense_rescue: bool,
+):
+    pooled = statistic.mean().float()
+    matrix = pooled.reshape(pooled.shape[0], -1)
+    first = statistic.fold_mean(0)
+    second = statistic.fold_mean(1)
+    total = float(pooled.double().square().sum().item())
+    noise = statistic.noise_sse()
+    if first is None or second is None:
         record = MDLTangentRecord(
-            name=candidate.name,
-            shape=candidate.shape,
-            role="head" if candidate.is_head else "backbone",
-            rank=0,
-            core_mode="skipped",
-            core_parameters=0,
-            basis_values=0,
-            total_gradient_energy=total,
-            noise_energy=noise,
-            captured_mean_energy=0.0,
-            mdl_zero=scores[0],
-            mdl_selected=scores[0],
-            diagonal_bic=None,
-            dense_bic=None,
+            name=candidate.name, shape=candidate.shape, role="backbone", rank=0,
+            core_mode="skipped", core_parameters=0, basis_values=0,
+            total_gradient_energy=total, noise_energy=noise, captured_mean_energy=0.0,
+            mdl_zero=0.0, mdl_selected=0.0, diagonal_bic=None, dense_bic=None,
         )
-        return record, None, None, residuals[0]
+        return record, None, None, None, None
 
-    left = left[:, :rank].contiguous()
-    right = right_h[:rank].transpose(0, 1).contiguous()
-    dense, diagonal_bic, dense_bic = _core_bic(statistic, left, right)
-    core_parameters = rank * rank if dense else rank
-    captured = float(singular[:rank].double().square().sum().item())
+    identifiable_rank = min(matrix.shape[0], matrix.shape[1], max(1, min(statistic.fold_counts)))
+    left, singular, right_h = _truncated_svd(matrix, identifiable_rank)
+    right = right_h.transpose(0, 1)
+    first_matrix = first.float().reshape(matrix.shape)
+    second_matrix = second.float().reshape(matrix.shape)
+    coordinates_first = left.transpose(0, 1) @ first_matrix @ right
+    coordinates_second = left.transpose(0, 1) @ second_matrix @ right
+    gains = _cross_fold_gain(coordinates_first, coordinates_second)
+
+    diagonal_gains = torch.diagonal(gains)
+    stable_diagonal = torch.nonzero(diagonal_gains > 0, as_tuple=False).flatten()
+    if stable_diagonal.numel() == 0:
+        record = MDLTangentRecord(
+            name=candidate.name, shape=candidate.shape, role="backbone", rank=0,
+            core_mode="skipped", core_parameters=0, basis_values=0,
+            total_gradient_energy=total, noise_energy=noise, captured_mean_energy=0.0,
+            mdl_zero=0.0, mdl_selected=0.0, diagonal_bic=None, dense_bic=None,
+        )
+        return record, None, None, None, None
+
+    if dense_rescue:
+        # When the geometric-mean probability assigned to the true class is
+        # no better than the square-root chance boundary, preserve every
+        # independently predictive leading mode and its full interaction core.
+        # This is an automatic capacity rescue, not a user setting.
+        predictive = diagonal_gains > 0
+        unsupported = torch.nonzero(~predictive, as_tuple=False).flatten()
+        intrinsic_rank = int(unsupported[0].item()) if unsupported.numel() else int(singular.numel())
+    else:
+        # Otherwise use the ceiling of the stable rank, a scale-free intrinsic
+        # dimension estimator, and require positive cross-fold evidence for
+        # every retained leading mode.
+        stable_rank = float(
+            singular.double().square().sum().item()
+            / max(singular[0].double().square().item(), torch.finfo(torch.float64).tiny)
+        )
+        intrinsic_rank = max(1, min(int(singular.numel()), int(math.ceil(stable_rank))))
+        predictive = diagonal_gains[:intrinsic_rank] > 0
+        unsupported = torch.nonzero(~predictive, as_tuple=False).flatten()
+        if unsupported.numel():
+            intrinsic_rank = int(unsupported[0].item())
+    if intrinsic_rank <= 0:
+        record = MDLTangentRecord(
+            name=candidate.name, shape=candidate.shape, role="backbone", rank=0,
+            core_mode="skipped", core_parameters=0, basis_values=0,
+            total_gradient_energy=total, noise_energy=noise, captured_mean_energy=0.0,
+            mdl_zero=0.0, mdl_selected=0.0, diagonal_bic=None, dense_bic=None,
+        )
+        return record, None, None, None, None
+    selected_modes = torch.arange(intrinsic_rank)
+    left_selected = left.index_select(1, selected_modes).contiguous()
+    right_selected = right.index_select(1, selected_modes).contiguous()
+    selected_gain_matrix = gains.index_select(0, selected_modes).index_select(1, selected_modes)
+    if dense_rescue:
+        mask = torch.ones_like(selected_gain_matrix, dtype=torch.bool)
+        predictive_gain = float(
+            torch.diagonal(selected_gain_matrix).clamp_min(0).double().sum().item()
+        )
+    else:
+        mask = selected_gain_matrix > 0
+        predictive_gain = float(selected_gain_matrix[mask].double().sum().item())
+    rows, columns = torch.nonzero(mask, as_tuple=True)
+    diagonal_count = int(torch.diagonal(mask).sum().item())
+    cross_count = int(mask.sum().item()) - diagonal_count
+    captured = float(singular.index_select(0, selected_modes).double().square().sum().item())
+    core_mode = (
+        "dense_chance_rescue" if dense_rescue
+        else ("diagonal" if cross_count == 0 else "sparse_cross_evidence")
+    )
+    basis_values = int(left_selected.numel() + right_selected.numel())
+    # Retain legacy fields for result-table compatibility. They now hold
+    # directly interpretable held-out risk values rather than invalid Bmn-BIC.
+    zero_risk = float(first_matrix.double().square().sum().item() + second_matrix.double().square().sum().item())
+    selected_risk = max(0.0, zero_risk - predictive_gain)
     record = MDLTangentRecord(
         name=candidate.name,
         shape=candidate.shape,
-        role="head" if candidate.is_head else "backbone",
-        rank=rank,
-        core_mode="dense" if dense else "diagonal",
-        core_parameters=core_parameters,
-        basis_values=int(left.numel() + right.numel()),
+        role="backbone",
+        rank=int(selected_modes.numel()),
+        core_mode=core_mode,
+        core_parameters=int(rows.numel()),
+        basis_values=basis_values,
         total_gradient_energy=total,
         noise_energy=noise,
         captured_mean_energy=captured,
-        mdl_zero=scores[0],
-        mdl_selected=scores[rank],
-        diagonal_bic=diagonal_bic,
-        dense_bic=dense_bic,
+        mdl_zero=zero_risk,
+        mdl_selected=selected_risk,
+        diagonal_bic=None,
+        dense_bic=None,
+        stable_diagonal_coordinates=diagonal_count,
+        stable_cross_coordinates=cross_count,
+        heldout_predictive_gain=predictive_gain,
     )
-    return record, left, right, residuals[rank]
+    return record, left_selected, right_selected, rows, columns
 
 
-def _head_policy(
-    head_candidates: list[_Candidate],
-    statistics: dict[str, _Statistic],
-    analyses: dict[str, tuple[MDLTangentRecord, Tensor | None, Tensor | None, float]],
-) -> tuple[str, dict[str, float]]:
-    if not head_candidates:
-        return "absent", {}
-    total_values = sum(candidate.parameter.numel() for candidate in head_candidates)
-    batches = max(statistics[candidate.name].count for candidate in head_candidates)
-    observations = batches * total_values
-    frozen_rss = 0.0
-    full_rss = 0.0
-    tangent_rss = 0.0
-    tangent_parameters = 0
-    for candidate in head_candidates:
-        statistic = statistics[candidate.name]
-        mean_energy = float(statistic.mean().double().square().sum().item())
-        noise = statistic.noise_sse()
-        frozen_rss += noise + statistic.count * mean_energy
-        full_rss += noise
-        if candidate.parameter.ndim >= 2:
-            record, _, _, selected_rss = analyses[candidate.name]
-            tangent_rss += selected_rss
-            tangent_parameters += record.core_parameters
-        else:
-            # Bias vectors are inexpensive and are trained in the tangent-head
-            # candidate; their evidence fit is exact up to observed noise.
-            tangent_rss += noise
-            tangent_parameters += candidate.parameter.numel()
-
-    scores = {
-        "frozen": _safe_information_score(frozen_rss, observations, 0),
-        "tangent": _safe_information_score(tangent_rss, observations, tangent_parameters),
-        "full": _safe_information_score(full_rss, observations, total_values),
-    }
-    policy = min(scores, key=lambda key: (scores[key], {"frozen": 0, "tangent": 1, "full": 2}[key]))
-    return policy, scores
-
-
-def _attach(
-    candidate: _Candidate,
-    record: MDLTangentRecord,
-    left: Tensor,
-    right: Tensor,
-) -> None:
+def _attach(candidate, record, left, right, rows, columns):
     transformation = MDLTangentCoreParametrization(
         left.to(device=candidate.parameter.device, dtype=candidate.parameter.dtype),
         right.to(device=candidate.parameter.device, dtype=candidate.parameter.dtype),
         candidate.shape,
-        dense_core=record.core_mode == "dense",
+        coordinate_rows=rows,
+        coordinate_columns=columns,
     )
     parametrize.register_parametrization(candidate.module, candidate.parameter_name, transformation)
+
+
+def _needs_dense_rescue(calibration_mean_loss: float | None, class_count: int | None) -> bool:
+    """Return the parameter-free square-root-chance capacity decision.
+
+    For mean cross-entropy L and C classes, exp(-L) is the geometric mean
+    probability assigned to the true class.  Dense rescue is activated when
+    exp(-L) <= C^{-1/2}, equivalently L >= (1/2) log C.
+    """
+    return bool(
+        calibration_mean_loss is not None
+        and class_count is not None
+        and class_count > 1
+        and calibration_mean_loss >= 0.5 * math.log(class_count)
+    )
 
 
 def calibrate_mdl_tangent_core(
@@ -567,128 +582,95 @@ def calibrate_mdl_tangent_core(
     is_head: Optional[Callable[[str], bool]] = None,
     batch_to_device: Optional[Callable[[object, torch.device | str], tuple[Tensor, Tensor]]] = None,
 ) -> MDLTangentReport:
-    """Calibrate and attach the fully automatic MDL-Evidence proposal.
-
-    The complete loader is consumed.  The API intentionally accepts no method-
-    specific rank, budget, layer, threshold, head-policy, core-mode, or batch-
-    count controls.
-    """
+    """Calibrate and attach the corrected automatic tangent-core proposal."""
     logits_fn = logits_fn or (lambda output: output)
     is_head = is_head or _default_is_head
     batch_to_device = batch_to_device or _unpack_batch
     candidates = list(_iter_calibration_candidates(model, is_head))
-    if not candidates:
-        raise RuntimeError("no eligible floating model parameters were found")
+    head_parameters = list(_iter_head_parameters(model, is_head))
+    if not candidates and not head_parameters:
+        raise RuntimeError("no eligible backbone or task-head parameters were found")
 
-    statistics, batches, examples = _collect_statistics(
-        model,
-        candidates,
-        data_loader,
-        loss_fn,
-        device=device,
-        logits_fn=logits_fn,
-        batch_to_device=batch_to_device,
-    )
+    if candidates:
+        statistics, batches, examples, calibration_mean_loss, class_count = _collect_statistics(
+            model, candidates, data_loader, loss_fn, device=device,
+            logits_fn=logits_fn, batch_to_device=batch_to_device,
+        )
+    else:
+        batches = len(data_loader) if hasattr(data_loader, "__len__") else 0
+        examples = 0
+        calibration_mean_loss = None
+        class_count = None
+        statistics = {}
 
-    analyses: dict[str, tuple[MDLTangentRecord, Tensor | None, Tensor | None, float]] = {}
-    for candidate in candidates:
-        if candidate.parameter.ndim >= 2:
-            analyses[candidate.name] = _analyze_weight(candidate, statistics[candidate.name])
-
-    head_candidates = [candidate for candidate in candidates if candidate.is_head]
-    head_policy, head_scores = _head_policy(head_candidates, statistics, analyses)
+    chance_reference_loss = math.log(class_count) if class_count and class_count > 1 else None
+    dense_rescue = _needs_dense_rescue(calibration_mean_loss, class_count)
 
     records: list[MDLTangentRecord] = []
     for candidate in candidates:
-        if candidate.parameter.ndim < 2:
-            continue
-        record, left, right, _ = analyses[candidate.name]
-        should_attach = record.rank > 0 and (not candidate.is_head or head_policy == "tangent")
-        if should_attach and left is not None and right is not None:
-            _attach(candidate, record, left, right)
-            records.append(record)
-        elif not candidate.is_head:
-            records.append(record)
-        elif head_policy == "tangent":
-            records.append(record)
+        record, left, right, rows, columns = _analyze_weight(
+            candidate, statistics[candidate.name], dense_rescue=dense_rescue,
+        )
+        records.append(record)
+        if record.rank > 0 and left is not None and right is not None and rows is not None and columns is not None:
+            _attach(candidate, record, left, right, rows, columns)
 
-    # Activate exactly the model selected by evidence.
+    # The task head is always fully trainable. This is part of the method, not
+    # a dataset/backbone-specific option.
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     for module in model.modules():
         if isinstance(module, MDLTangentCoreParametrization):
             module.core.requires_grad_(True)
-
     head_trainable = 0
-    if head_policy == "full":
-        for name, parameter in model.named_parameters():
-            if ".parametrizations." not in name and is_head(name):
-                parameter.requires_grad_(True)
-                head_trainable += parameter.numel()
-    elif head_policy == "tangent":
-        for name, parameter in model.named_parameters():
-            if ".parametrizations." not in name and is_head(name) and parameter.ndim < 2:
-                parameter.requires_grad_(True)
-                head_trainable += parameter.numel()
+    for _, parameter in _iter_head_parameters(model, is_head):
+        parameter.requires_grad_(True)
+        head_trainable += int(parameter.numel())
 
     adapter_parameters = sum(
-        module.trainable_parameter_count
-        for module in model.modules()
+        module.trainable_parameter_count for module in model.modules()
         if isinstance(module, MDLTangentCoreParametrization)
     )
     basis_values = sum(
-        module.basis_value_count
-        for module in model.modules()
+        module.basis_value_count for module in model.modules()
         if isinstance(module, MDLTangentCoreParametrization)
     )
-
-    fallback_reason: str | None = None
-    if adapter_parameters + head_trainable == 0:
-        # A completely frozen model cannot execute a training run.  The least
-        # assumption-heavy non-degenerate fallback is the ordinary task head.
-        for name, parameter in model.named_parameters():
-            if ".parametrizations." not in name and is_head(name):
-                parameter.requires_grad_(True)
-                head_trainable += parameter.numel()
-        head_policy = "full"
-        fallback_reason = "all MDL candidates selected zero trainable coordinates"
-
     report = MDLTangentReport(
-        method="mdl_evidence_adaptive_tangent_core_v6",
+        method="cross_fitted_evidence_adaptive_tangent_core_v6",
         calibration_batches=batches,
         calibration_examples=examples,
         candidate_tensors=len(records),
         selected_tensors=sum(record.rank > 0 for record in records),
         skipped_tensors=sum(record.rank == 0 for record in records),
         adapter_parameters=adapter_parameters,
-        head_policy=head_policy,
+        head_policy="full",
         head_trainable_parameters=head_trainable,
         frozen_basis_values=basis_values,
-        fallback_reason=fallback_reason,
+        fallback_reason=None,
         records=tuple(records),
+        calibration_mean_loss=calibration_mean_loss,
+        chance_reference_loss=chance_reference_loss,
+        dense_rescue_activated=dense_rescue,
     )
     payload = report.to_dict()
-    payload["head_policy_scores"] = head_scores
+    payload["selection_rule"] = (
+        "full_core_square_root_chance_rescue" if dense_rescue
+        else "stable_rank_positive_cross_fold_predictive_gain"
+    )
+    payload["head_policy_scores"] = {}
     model._mdl_tangent_report = payload  # type: ignore[attr-defined]
     return report
 
 
 def set_mdl_tangent_trainability(model: nn.Module) -> None:
-    report = getattr(model, "_mdl_tangent_report", {})
-    head_policy = report.get("head_policy", "full") if isinstance(report, dict) else "full"
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     for module in model.modules():
         if isinstance(module, MDLTangentCoreParametrization):
             module.core.requires_grad_(True)
-    if head_policy == "full":
-        for name, parameter in model.named_parameters():
-            if ".parametrizations." not in name and _default_is_head(name):
-                parameter.requires_grad_(True)
-    elif head_policy == "tangent":
-        for name, parameter in model.named_parameters():
-            if ".parametrizations." not in name and _default_is_head(name) and parameter.ndim < 2:
-                parameter.requires_grad_(True)
+    for name, parameter in model.named_parameters():
+        if ".parametrizations." not in name and _default_is_head(name):
+            parameter.requires_grad_(True)
 
 
 def iter_mdl_tangent_parametrizations(model: nn.Module):
@@ -703,22 +685,15 @@ def iter_mdl_tangent_parametrizations(model: nn.Module):
 
 
 def mdl_tangent_parameter_count(model: nn.Module) -> int:
-    return sum(
-        transformation.trainable_parameter_count
-        for _, _, _, transformation in iter_mdl_tangent_parametrizations(model)
-    )
+    return sum(transformation.trainable_parameter_count for _, _, _, transformation in iter_mdl_tangent_parametrizations(model))
 
 
 def mdl_tangent_basis_value_count(model: nn.Module) -> int:
-    return sum(
-        transformation.basis_value_count
-        for _, _, _, transformation in iter_mdl_tangent_parametrizations(model)
-    )
+    return sum(transformation.basis_value_count for _, _, _, transformation in iter_mdl_tangent_parametrizations(model))
 
 
 @torch.no_grad()
 def merge_mdl_tangent_cores_(model: nn.Module) -> int:
-    """Exactly merge all selected updates and remove runtime parametrizations."""
     targets: list[tuple[nn.Module, str]] = []
     seen: set[tuple[int, str]] = set()
     for _, module, parameter_name, _ in iter_mdl_tangent_parametrizations(model):

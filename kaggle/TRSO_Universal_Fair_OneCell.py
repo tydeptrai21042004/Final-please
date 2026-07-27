@@ -1,4 +1,4 @@
-# One-cell Kaggle runner: MDL-Evidence Adaptive Tangent-Core V6 + compatible baselines.
+# One-cell Kaggle runner: Cross-Fitted Evidence Adaptive Tangent-Core V6 + compatible baselines.
 # Kaggle settings: Internet ON; GPU T4 x2 recommended.
 
 import json
@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 # ============================= EDITABLE CONFIGURATION =============================
-REPO_URL = "https://github.com/tydeptrai21042004/TRSO.git"
+REPO_URL = "https://github.com/tydeptrai21042004/TRSO_final.git"
 REPO_REF = "main"
 PREFER_UPLOADED_RELEASE = True
 ALLOW_GITHUB_FALLBACK = True
@@ -18,7 +18,7 @@ WORK = Path("/kaggle/working")
 INPUT = Path("/kaggle/input")
 REPO = WORK / "TRSO"
 DATA_PATH = WORK / "data"
-OUTPUT_ROOT = WORK / "trso_mdl_v6_one_seed_10epoch_results"
+OUTPUT_ROOT = WORK / "trso_cross_fitted_v6_one_seed_10epoch_results"
 
 DATASET = "dtd"
 TASK = "auto"
@@ -181,7 +181,7 @@ def install_repository():
     commit = run(["git", "rev-parse", "HEAD"], cwd=REPO, capture=True).stdout.strip()
     if not is_clean_release(REPO):
         raise RuntimeError(
-            "The cloned GitHub branch is not the clean MDL Tangent-Core V6 release. "
+            "The cloned GitHub branch is not the clean Cross-Fitted Evidence Tangent-Core V6 release. "
             "Upload TRSO-mdl-tangent-v6-final-fixed.zip as a Kaggle dataset, "
             "or update GitHub before rerunning."
         )
@@ -344,7 +344,7 @@ if not KEEP_CHECKPOINTS:
         for path in OUTPUT_ROOT.rglob(pattern):
             path.unlink(missing_ok=True)
 
-zip_path = WORK / "trso_mdl_v6_one_seed_10epoch_results.zip"
+zip_path = WORK / "trso_cross_fitted_v6_one_seed_10epoch_results.zip"
 if zip_path.exists():
     zip_path.unlink()
 with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -352,7 +352,7 @@ with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive
         if path.is_file():
             archive.write(path, path.relative_to(OUTPUT_ROOT.parent))
 
-print("\nCompleted MDL-Evidence Adaptive Tangent-Core V6 plus compatible baselines.")
+print("\nCompleted Cross-Fitted Evidence Adaptive Tangent-Core V6 plus compatible baselines.")
 print("Seed:", SEEDS)
 print("Epochs:", EPOCHS)
 print("Results directory:", OUTPUT_ROOT)

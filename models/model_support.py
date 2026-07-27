@@ -50,7 +50,7 @@ METHOD_SUPPORT: Dict[str, MethodSupport] = {
     ),
     "trso": MethodSupport(
         ALL_FAMILIES,
-        "The proposal adapts generic matrix-shaped weights with MDL-selected two-sided tangent cores.",
+        "The proposal adapts generic matrix-shaped weights with cross-fitted evidence-selected two-sided tangent cores and a full task head.",
         "Architecture-agnostic Conv/Linear weights; normalization and embedding tensors are conservatively excluded."
     ),
     "bam": MethodSupport(
